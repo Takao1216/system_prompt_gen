@@ -5,13 +5,16 @@ PoCデモプログラムのソースコードを受け取り、プロンプト�
 
 import json
 import re
-from typing import Dict, List, Optional, Any, Tuple
+import os
+from pathlib import Path
+from typing import Dict, List, Optional, Any, Tuple, Union
 from dataclasses import dataclass
 from datetime import datetime
 import ast
 from pygments import highlight
 from pygments.lexers import get_lexer_by_name, guess_lexer
 from pygments.formatters import HtmlFormatter
+from collections import Counter
 
 
 @dataclass
@@ -23,6 +26,26 @@ class CodeInput:
     description: Optional[str] = None
     requirements: Optional[str] = None
     timestamp: Optional[str] = None
+
+@dataclass
+class FileCodeInput:
+    """ファイルから読み込んだコード入力データクラス"""
+    file_path: str
+    code: str
+    language: Optional[str] = None
+    file_size: int = 0
+    modified_time: Optional[str] = None
+    relative_path: Optional[str] = None
+
+
+@dataclass
+class MultiFileInput:
+    """複数ファイルの入力データクラス"""
+    files: List[FileCodeInput]
+    total_files: int = 0
+    total_lines: int = 0
+    project_root: Optional[str] = None
+    description: Optional[str] = None
     
 
 @dataclass
@@ -302,6 +325,305 @@ class CodeInputHandler:
         self.analysis_result = self.analyze_code(code, detected_language)
         
         return self.current_input, self.analysis_result
+
+    def process_file_input(self, 
+                          file_path: str,
+                          project_root: str = None) -> Tuple[FileCodeInput, CodeAnalysisResult]:
+        """
+        単一ファイルを処理
+        
+        Args:
+            file_path (str): ファイルパス
+            project_root (str): プロジェクトルートディレクトリ
+            
+        Returns:
+            Tuple[FileCodeInput, CodeAnalysisResult]: ファイル入力データと解析結果
+        """
+        try:
+            # ファイル読み込み
+            with open(file_path, 'r', encoding='utf-8') as f:
+                code_content = f.read()
+            
+            # ファイル情報取得
+            file_stat = os.stat(file_path)
+            file_path_obj = Path(file_path)
+            
+            # 相対パス計算
+            relative_path = None
+            if project_root:
+                try:
+                    relative_path = str(file_path_obj.relative_to(project_root))
+                except ValueError:
+                    relative_path = str(file_path_obj)
+            
+            # 言語判定
+            language = self.detect_language_from_file(file_path, code_content)
+            
+            # ファイル入力データ作成
+            file_input = FileCodeInput(
+                file_path=file_path,
+                code=code_content,
+                language=language,
+                file_size=file_stat.st_size,
+                modified_time=datetime.fromtimestamp(file_stat.st_mtime).isoformat(),
+                relative_path=relative_path
+            )
+            
+            # コード解析
+            analysis = self.analyze_code(code_content, language)
+            
+            return file_input, analysis
+            
+        except Exception as e:
+            # エラー時は空の結果を返す
+            error_input = FileCodeInput(
+                file_path=file_path,
+                code=f"# エラー: ファイルを読み込めませんでした\n# {str(e)}",
+                language='unknown'
+            )
+            
+            error_analysis = CodeAnalysisResult(
+                language='unknown',
+                lines_of_code=0,
+                functions=[],
+                classes=[],
+                imports=[],
+                complexity_estimate='unknown',
+                main_purpose=f"エラー: {str(e)}",
+                suggested_improvements=[f"ファイル読み込みエラーを修正: {str(e)}"]
+            )
+            
+            return error_input, error_analysis
+    
+    def process_multiple_files(self,
+                              file_paths: List[str],
+                              project_root: str = None,
+                              description: str = None) -> Tuple[MultiFileInput, Dict[str, CodeAnalysisResult]]:
+        """
+        複数ファイルを処理
+        
+        Args:
+            file_paths (List[str]): ファイルパスのリスト
+            project_root (str): プロジェクトルートディレクトリ
+            description (str): プロジェクトの説明
+            
+        Returns:
+            Tuple[MultiFileInput, Dict[str, CodeAnalysisResult]]: 複数ファイル入力データと解析結果
+        """
+        files = []
+        analyses = {}
+        total_lines = 0
+        
+        for file_path in file_paths:
+            file_input, analysis = self.process_file_input(file_path, project_root)
+            files.append(file_input)
+            analyses[file_path] = analysis
+            total_lines += analysis.lines_of_code
+        
+        multi_input = MultiFileInput(
+            files=files,
+            total_files=len(files),
+            total_lines=total_lines,
+            project_root=project_root,
+            description=description
+        )
+        
+        return multi_input, analyses
+    
+    def detect_language_from_file(self, file_path: str, code_content: str = None) -> str:
+        """
+        ファイルパスと内容から言語を判定
+        
+        Args:
+            file_path (str): ファイルパス
+            code_content (str): ファイルの内容（オプション）
+            
+        Returns:
+            str: 判定された言語
+        """
+        # 拡張子による判定
+        extension = Path(file_path).suffix.lower()
+        
+        extension_map = {
+            '.py': 'python',
+            '.js': 'javascript',
+            '.jsx': 'javascript',
+            '.ts': 'typescript',
+            '.tsx': 'typescript',
+            '.java': 'java',
+            '.go': 'go',
+            '.rs': 'rust',
+            '.cpp': 'cpp',
+            '.c': 'cpp',
+            '.rb': 'ruby',
+            '.php': 'php',
+            '.swift': 'swift',
+            '.kt': 'kotlin',
+            '.cs': 'csharp'
+        }
+        
+        if extension in extension_map:
+            return extension_map[extension]
+        
+        # 内容による判定（拡張子で判定できない場合）
+        if code_content:
+            return self.detect_language(code_content)
+        
+        return 'unknown'
+    
+    def generate_multi_file_context(self, 
+                                   multi_input: MultiFileInput,
+                                   analyses: Dict[str, CodeAnalysisResult]) -> Dict[str, Any]:
+        """
+        複数ファイルのプロンプト生成用コンテキストを作成
+        
+        Args:
+            multi_input (MultiFileInput): 複数ファイル入力データ
+            analyses (Dict[str, CodeAnalysisResult]): 各ファイルの解析結果
+            
+        Returns:
+            Dict[str, Any]: プロンプト生成に必要なコンテキスト
+        """
+        # 言語別統計
+        language_stats = {}
+        all_functions = []
+        all_classes = []
+        all_imports = []
+        complexity_levels = []
+        
+        for file_input in multi_input.files:
+            analysis = analyses[file_input.file_path]
+            
+            # 言語別統計
+            lang = analysis.language
+            if lang not in language_stats:
+                language_stats[lang] = {'files': 0, 'lines': 0}
+            language_stats[lang]['files'] += 1
+            language_stats[lang]['lines'] += analysis.lines_of_code
+            
+            # 全体の要素を収集
+            all_functions.extend(analysis.functions)
+            all_classes.extend(analysis.classes)
+            all_imports.extend(analysis.imports)
+            complexity_levels.append(analysis.complexity_estimate)
+        
+        # メイン言語を特定
+        main_language = max(language_stats.keys(), 
+                          key=lambda x: language_stats[x]['lines'])
+        
+        # プロジェクト構造の概要
+        file_structure = []
+        for file_input in multi_input.files:
+            rel_path = file_input.relative_path or os.path.basename(file_input.file_path)
+            analysis = analyses[file_input.file_path]
+            file_structure.append({
+                'path': rel_path,
+                'language': analysis.language,
+                'lines': analysis.lines_of_code,
+                'functions': len(analysis.functions),
+                'classes': len(analysis.classes)
+            })
+        
+        context = {
+            "project_type": "multi_file_project",
+            "main_language": main_language,
+            "language_stats": language_stats,
+            "total_files": multi_input.total_files,
+            "total_lines": multi_input.total_lines,
+            "file_structure": file_structure,
+            "all_functions": list(set(all_functions))[:20],  # 最大20個
+            "all_classes": list(set(all_classes))[:10],      # 最大10個
+            "unique_imports": list(set(all_imports))[:15],   # 最大15個
+            "complexity_distribution": dict(Counter(complexity_levels)),
+            "project_root": multi_input.project_root,
+            "description": multi_input.description,
+            "suggested_focus": self._determine_project_focus(multi_input, analyses)
+        }
+        
+        return context
+    
+    def _determine_project_focus(self, 
+                               multi_input: MultiFileInput, 
+                               analyses: Dict[str, CodeAnalysisResult]) -> List[str]:
+        """プロジェクトの焦点を特定"""
+        focus_areas = []
+        
+        # ファイル数による判定
+        if multi_input.total_files > 10:
+            focus_areas.append("大規模プロジェクトの構造最適化")
+        elif multi_input.total_files > 5:
+            focus_areas.append("モジュール間の依存関係整理")
+        
+        # 言語による判定
+        purposes = [analysis.main_purpose for analysis in analyses.values()]
+        if "Web API/アプリケーション開発" in purposes:
+            focus_areas.append("API設計とパフォーマンス")
+        if "データ処理・分析" in purposes:
+            focus_areas.append("データパイプラインの最適化")
+        if "機械学習モデル" in purposes:
+            focus_areas.append("MLモデルのデプロイメント")
+        
+        # 複雑度による判定
+        complex_files = [
+            analysis for analysis in analyses.values()
+            if analysis.complexity_estimate == 'complex'
+        ]
+        if len(complex_files) > 2:
+            focus_areas.append("コード複雑度の削減")
+        
+        return focus_areas or ["コード品質の向上"]
+    
+    def export_multi_file_analysis(self, 
+                                  multi_input: MultiFileInput,
+                                  analyses: Dict[str, CodeAnalysisResult],
+                                  output_path: str = "multi_file_analysis.json") -> str:
+        """
+        複数ファイル解析結果をエクスポート
+        
+        Args:
+            multi_input (MultiFileInput): 複数ファイル入力データ
+            analyses (Dict[str, CodeAnalysisResult]): 解析結果
+            output_path (str): 出力ファイルパス
+            
+        Returns:
+            str: エクスポートファイルパス
+        """
+        from collections import Counter
+        
+        export_data = {
+            "project_info": {
+                "total_files": multi_input.total_files,
+                "total_lines": multi_input.total_lines,
+                "project_root": multi_input.project_root,
+                "description": multi_input.description,
+                "analysis_timestamp": datetime.now().isoformat()
+            },
+            "files": []
+        }
+        
+        for file_input in multi_input.files:
+            analysis = analyses[file_input.file_path]
+            file_data = {
+                "path": file_input.relative_path or file_input.file_path,
+                "language": file_input.language,
+                "size": file_input.file_size,
+                "modified_time": file_input.modified_time,
+                "analysis": {
+                    "lines_of_code": analysis.lines_of_code,
+                    "functions": analysis.functions,
+                    "classes": analysis.classes,
+                    "imports": analysis.imports[:10],  # 最大10個
+                    "complexity": analysis.complexity_estimate,
+                    "main_purpose": analysis.main_purpose,
+                    "suggestions": analysis.suggested_improvements
+                }
+            }
+            export_data["files"].append(file_data)
+        
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(export_data, f, ensure_ascii=False, indent=2)
+        
+        return output_path
     
     def generate_prompt_context(self) -> Dict[str, Any]:
         """
