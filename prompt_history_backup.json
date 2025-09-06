@@ -1,0 +1,101 @@
+{
+  "export_date": "2025-09-06T14:02:58.843542",
+  "total_prompts": 5,
+  "prompts": [
+    {
+      "id": "8c5c1af5",
+      "timestamp": "2025-09-05T16:47:05.840812",
+      "prompt_type": "data_analysis",
+      "user_requirements": "売上データから季節性を分析したい",
+      "generated_prompt": "以下の売上データを分析し、季節性パターンを特定してください...",
+      "quality_scores": {
+        "clarity": 8.5,
+        "specificity": 7.8,
+        "completeness": 9.0,
+        "efficiency": 8.2,
+        "reproducibility": 8.7,
+        "overall": 8.4
+      },
+      "improved_prompt": null,
+      "metadata": {
+        "domain": "eコマース",
+        "priority": "high"
+      },
+      "tags": []
+    },
+    {
+      "id": "5cc0cf49",
+      "timestamp": "2025-09-05T17:47:03.928131",
+      "prompt_type": "test",
+      "user_requirements": "Test requirements",
+      "generated_prompt": "Test prompt content",
+      "quality_scores": {},
+      "improved_prompt": null,
+      "metadata": {},
+      "tags": []
+    },
+    {
+      "id": "b56f02b8",
+      "timestamp": "2025-09-06T13:37:35.032057",
+      "prompt_type": "data_analysis",
+      "user_requirements": "売上データから季節性を分析したい",
+      "generated_prompt": "以下の売上データを分析し、季節性パターンを特定してください...",
+      "quality_scores": {
+        "clarity": 8.5,
+        "specificity": 7.8,
+        "completeness": 9.0,
+        "efficiency": 8.2,
+        "reproducibility": 8.7,
+        "overall": 8.4
+      },
+      "improved_prompt": null,
+      "metadata": {
+        "domain": "eコマース",
+        "priority": "high"
+      },
+      "tags": []
+    },
+    {
+      "id": "555bc1eb",
+      "timestamp": "2025-09-06T13:54:53.949751",
+      "prompt_type": "data_analysis",
+      "user_requirements": "売上データから季節性を分析したい",
+      "generated_prompt": "以下の売上データを分析し、季節性パターンを特定してください...",
+      "quality_scores": {
+        "clarity": 8.5,
+        "specificity": 7.8,
+        "completeness": 9.0,
+        "efficiency": 8.2,
+        "reproducibility": 8.7,
+        "overall": 8.4
+      },
+      "improved_prompt": null,
+      "metadata": {
+        "domain": "eコマース",
+        "priority": "high"
+      },
+      "tags": []
+    },
+    {
+      "id": "f86619a9",
+      "timestamp": "2025-09-06T14:02:58.686374",
+      "prompt_type": "data_analysis",
+      "user_requirements": "売上データから季節性を分析したい",
+      "generated_prompt": "以下の売上データを分析し、季節性パターンを特定してください...",
+      "quality_scores": {
+        "clarity": 8.5,
+        "specificity": 7.8,
+        "completeness": 9.0,
+        "efficiency": 8.2,
+        "reproducibility": 8.7,
+        "overall": 8.4
+      },
+      "improved_prompt": null,
+      "metadata": {
+        "domain": "eコマース",
+        "priority": "high"
+      },
+      "tags": []
+    }
+  ]
+}
